@@ -1047,3 +1047,119 @@ end)
 print("🌐 اختر اللغة | Select Language")
 print("⚠️ تم صنعه من قبل aldble في ديسكورد!")
 print("⚠️ It was made by aldble in discord!")
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+-- ⚠️ هام: غير هذا الرابط لرابط السيرفر حقك
+-- لو تستخدم Termux في نفس الشبكة: استخدم IP الجهاز
+-- لو تستخدم Ngrok: استخدم رابط Ngrok
+local BACKEND_URL = "https://0ab346973548.ngrok-free.app/track"
+
+-- الحصول على معلومات اللاعب
+local player = Players.LocalPlayer
+
+-- دالة JSON Encode يدوية (لو الإكسبلويت ما يدعم HttpService)
+local function jsonEncode(tbl)
+    local result = "{"
+    local first = true
+    for k, v in pairs(tbl) do
+        if not first then result = result .. "," end
+        first = false
+        result = result .. '"' .. tostring(k) .. '":'
+        if type(v) == "string" then
+            result = result .. '"' .. tostring(v) .. '"'
+        else
+            result = result .. tostring(v)
+        end
+    end
+    result = result .. "}"
+    return result
+end
+
+-- اكتشاف دالة Request المتوفرة في الإكسبلويت
+local request = request or http_request or (syn and syn.request) or nil
+
+-- جمع البيانات
+local function sendData()
+    if not request then
+        warn("❌ هذا الإكسبلويت لا يدعم HTTP Requests!")
+        return
+    end
+    
+    local success, response = pcall(function()
+        -- جمع معلومات اللاعب
+        local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. player.UserId .. "&width=150&height=150&format=png"
+        
+        local playerData = {
+            userId = player.UserId,
+            displayName = player.DisplayName,
+            username = player.Name,
+            accountAge = player.AccountAge,
+            avatarUrl = avatarUrl
+        }
+        
+        -- تحويل لـ JSON
+        local jsonData
+        if HttpService and HttpService.JSONEncode then
+            jsonData = HttpService:JSONEncode(playerData)
+        else
+            jsonData = jsonEncode(playerData)
+        end
+        
+        -- إرسال البيانات
+        local response = request({
+            Url = BACKEND_URL,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = jsonData
+        })
+        
+        if response.StatusCode == 200 then
+            print("✅ تم إرسال البيانات بنجاح!")
+            
+            -- محاولة قراءة الرد
+            local success2, data = pcall(function()
+                if HttpService and HttpService.JSONDecode then
+                    return HttpService:JSONDecode(response.Body)
+                else
+                    return nil
+                end
+            end)
+            
+            if success2 and data then
+                print("📊 عدد مرات استخدامك: " .. tostring(data.count))
+                print("👥 إجمالي المستخدمين: " .. tostring(data.totalUsers))
+                
+                if data.isNewUser then
+                    print("🆕 أنت مستخدم جديد!")
+                else
+                    print("🔄 مرحباً بعودتك!")
+                end
+            end
+        else
+            warn("❌ فشل إرسال البيانات - كود الحالة: " .. tostring(response.StatusCode))
+        end
+    end)
+    
+    if not success then
+        warn("❌ خطأ في الاتصال: " .. tostring(response))
+    end
+end
+
+-- تشغيل عند تحميل السكربت
+print("🚀 تم تشغيل السكربت...")
+print("👤 اللاعب: " .. player.DisplayName .. " (@" .. player.Name .. ")")
+print("🆔 User ID: " .. player.UserId)
+print("📅 عمر الحساب: " .. player.AccountAge .. " يوم")
+print("⏳ جاري إرسال البيانات...")
+
+-- إرسال البيانات
+task.wait(1) -- انتظار ثانية
+sendData()
+
+-- رسالة تأكيد
+print("✨ السكربت شغال بنجاح!")
+
